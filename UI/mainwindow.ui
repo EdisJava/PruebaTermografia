@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ui version="4.0">
+ <class>MainWindow</class>
+ <widget class="QMainWindow" name="MainWindow">
+  <property name="geometry">
+   <rect>
+    <x>0</x>
+    <y>0</y>
+    <width>1000</width>
+    <height>800</height>
+   </rect>
+  </property>
+  <property name="windowTitle">
+   <string>DALIA - Análisis Termográfico</string>
+  </property>
+  <widget class="QWidget" name="centralwidget">
+   <layout class="QVBoxLayout" name="verticalLayoutMain">
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayoutVisual">
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayoutLista">
+        <item>
+         <widget class="QPushButton" name="btnImportar">
+          <property name="minimumSize">
+           <size>
+            <width>0</width>
+            <height>40</height>
+           </size>
+          </property>
+          <property name="text">
+           <string>📥 Importar JSON</string>
+          </property>
+          <property name="styleSheet">
+           <string>font-weight: bold; background-color: #f0f0f0;</string>
+          </property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QListWidget" name="listTermogramas">
+          <property name="maximumSize">
+           <size>
+            <width>200</width>
+            <height>16777215</height>
+           </size>
+          </property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+      <item>
+       <widget class="QLabel" name="labelImagen">
+        <property name="minimumSize">
+         <size>
+          <width>640</width>
+          <height>480</height>
+         </size>
+        </property>
+        <property name="styleSheet">
+         <string>background-color: black; border: 2px solid #333;</string>
+        </property>
+        <property name="text">
+         <string>Cargue un termograma</string>
+        </property>
+        <property name="alignment">
+         <set>Qt::AlignCenter</set>
+        </property>
+       </widget>
+      </item>
+      <item>
+       <layout class="QVBoxLayout" name="verticalLayoutRampa">
+        <item>
+         <widget class="QLabel" name="lblMaxTemp">
+          <property name="text"><string>Max: --°C</string></property>
+          <property name="alignment"><set>Qt::AlignCenter</set></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="labelRampa">
+          <property name="minimumSize"><size><width>50</width><height>0</height></size></property>
+          <property name="styleSheet"><string>border: 1px solid gray;</string></property>
+         </widget>
+        </item>
+        <item>
+         <widget class="QLabel" name="lblMinTemp">
+          <property name="text"><string>Min: --°C</string></property>
+          <property name="alignment"><set>Qt::AlignCenter</set></property>
+         </widget>
+        </item>
+       </layout>
+      </item>
+     </layout>
+    </item>
+    <item>
+     <layout class="QHBoxLayout" name="horizontalLayoutInfo">
+      <item><widget class="QLabel" name="label"><property name="text"><string>Pixel:</string></property></widget></item>
+      <item><widget class="QLineEdit" name="txtPixel"><property name="readOnly"><bool>true</bool></property></widget></item>
+      <item><widget class="QLabel" name="label_2"><property name="text"><string>Temp:</string></property></widget></item>
+      <item><widget class="QLineEdit" name="txtTemp"><property name="readOnly"><bool>true</bool></property></widget></item>
+     </layout>
+    </item>
+   </layout>
+  </widget>
+  <widget class="QMenuBar" name="menubar">
+   <widget class="QMenu" name="menuArchivo">
+    <property name="title"><string>Archivo</string></property>
+    <addaction name="actionImportar_termogramas"/>
+   </widget>
+  </widget>
+  <action name="actionImportar_termogramas">
+   <property name="text"><string>Importar termogramas</string></property>
+  </action>
+ </widget>
+</ui>

@@ -1,0 +1,30 @@
+{
+  "campaña": 2025,
+  "circuito": "132BSS-MES",
+  "Apoyo": [
+    {
+      "nombre": "1",
+      "termograma": {
+        "url": "data_200x150_1.csv",
+        "coordenada": {
+          "x": 231323.23,
+          "y": 324234.5,
+          "z": 32
+        }
+      }
+    }
+  ],
+  "Vano": [
+    {
+      "nombre": "1-2",
+      "termograma": {
+        "url": "data_200x150_2.csv",
+        "coordenada": {
+          "x": 232313.23,
+          "y": 5624234.5,
+          "z": 346
+        }
+      }
+    }
+  ]
+}
