@@ -27,10 +27,12 @@ public:
     QList<ImagePoint> hotspots() const { return m_hotspots; }
     int hotspotCount() const { return m_hotspots.size(); }
     ImagePoint* currentHotspot() { return m_currentHotspot; }
+    void addPixelWithName(const QPoint& pixel, const QString& name);
 
     // Utilidad
     bool isValidCoordinate(const QPoint& pixel) const;
     void setCurrentHotspotColor(const QColor& color);
+    void setHotspotName(int id, const QString& newName);
 
 signals:
     void hotspotUpdated(const ImagePoint& hotspot);

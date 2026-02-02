@@ -17,8 +17,10 @@ void ImagePoint::addPixel(const QPoint& pixel)
 
 QString ImagePoint::toString() const
 {
+    QString displayName = m_name.isEmpty() ? QString("Hotpoint%1").arg(m_id) : m_name;
+
     if (m_pixels.isEmpty()) {
-        return QString("Hotpoint%1 - (vacío)").arg(m_id);
+        return QString("%1 - (vacío)").arg(displayName);
     }
 
     QStringList pixelStrings;
@@ -26,5 +28,12 @@ QString ImagePoint::toString() const
         pixelStrings.append(QString("(%1,%2)").arg(pixel.x()).arg(pixel.y()));
     }
 
-    return QString("Hotpoint%1 - %2").arg(m_id).arg(pixelStrings.join(", "));
+    return QString("%1 - %2").arg(displayName).arg(pixelStrings.join(", "));
 }
+
+
+void ImagePoint::setName(const QString& name) { m_name = name; }
+
+QString ImagePoint::name() const { return m_name; }
+
+

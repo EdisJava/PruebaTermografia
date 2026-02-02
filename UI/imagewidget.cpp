@@ -165,6 +165,10 @@ void ImageWidget::contextMenuEvent(QContextMenuEvent *event)
     QAction* selected = menu.exec(event->globalPos());
     if (!selected) return; // usuario cerró el menú sin elegir
 
+    if (selected == addHotspot) {
+        emit markHotspotRequested(m_lastRightClickPixel);
+    }
+
     // Acción según lo elegido
     QPoint pixel = imagePixelAt(event->pos());
 

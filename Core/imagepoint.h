@@ -23,6 +23,8 @@ public:
     int pixelCount() const { return m_pixels.size(); }
     QColor color() const { return m_color; }
     void setColor(const QColor& color) { m_color = color; }
+    QString name() const;
+    void setName(const QString& name);
 
     // Formato para mostrar
     QString toString() const;
@@ -30,6 +32,7 @@ public:
 private:
     int m_id;
     QList<QPoint> m_pixels;  // Lista de píxeles (x,y) de este hotspot
+    QString m_name;
 };
 
 #endif // IMAGEPOINT_H

@@ -29,6 +29,7 @@ public:
 signals:
     void rightClicked(const QPoint& imagePixel);
     void colorSelected(const QColor& color);
+    void markHotspotRequested(const QPoint& pixel);
 
 protected:
     void paintEvent(QPaintEvent *event) override;

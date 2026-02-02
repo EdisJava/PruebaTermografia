@@ -19,12 +19,13 @@ private slots:
     void clearHotspots();
     void onHotspotUpdated(const ImagePoint& hotspot);
     void onHotspotsCleared();
-
+    void onRightClickAtPixel(const QPoint& pixel);
 private:
     void setupUI();
     void createMenuBar();
     void updateHotspotsList();
     void updatePixelMarkers();
+    void changeHotspotName();
 
     ImageWidget* m_imageWidget;
     QListWidget* m_hotspotsList;

@@ -77,3 +77,28 @@ void ImagePointManager::setCurrentHotspotColor(const QColor& color)
     emit hotspotColorChanged(); // para repintar la imagen
 }
 
+void ImagePointManager::setHotspotName(int id, const QString& newName)
+{
+    for (ImagePoint& hotspot : m_hotspots) {
+        if (hotspot.id() == id) {
+            hotspot.setName(newName);
+            emit hotspotUpdated(hotspot);
+            break;
+        }
+    }
+}
+
+void ImagePointManager::addPixelWithName(const QPoint& pixel, const QString& name)
+{
+    if (!isValidCoordinate(pixel))
+        return;
+
+    ImagePoint newHotspot(m_nextId++);
+    newHotspot.addPixel(pixel);
+    newHotspot.setColor(m_globalHotspotColor); // tu color global
+    newHotspot.setName(name);
+
+    m_hotspots.append(newHotspot);
+
+    emit hotspotUpdated(m_hotspots.last());
+}

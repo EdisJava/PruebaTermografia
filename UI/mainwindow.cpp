@@ -9,6 +9,9 @@
 #include <QPushButton>
 #include <QLabel>
 #include <QDebug>
+#include <QLineEdit>
+#include <QInputDialog>
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -18,8 +21,8 @@ MainWindow::MainWindow(QWidget *parent)
     createMenuBar();
 
     // Conectar señales
-    connect(m_imageWidget, &ImageWidget::rightClicked,
-            m_manager, &ImagePointManager::addPixelToCurrentHotspot);
+    /*    connect(m_imageWidget, &ImageWidget::rightClicked,
+            m_manager, &ImagePointManager::addPixelToCurrentHotspot);*/
     connect(m_manager, SIGNAL(hotspotUpdated(ImagePoint)),
             this, SLOT(onHotspotUpdated(ImagePoint)));
     connect(m_manager, &ImagePointManager::hotspotsCleared,
@@ -31,7 +34,9 @@ MainWindow::MainWindow(QWidget *parent)
     connect(m_manager, &ImagePointManager::hotspotColorChanged,
             this, &MainWindow::updatePixelMarkers);
     connect(m_imageWidget, &ImageWidget::colorSelected,
-            m_manager, &ImagePointManager::setCurrentHotspotColor);
+            m_manager, &ImagePointManager::setCurrentHotspotColor);    
+    connect(m_imageWidget, &ImageWidget::markHotspotRequested,
+            this, &MainWindow::onRightClickAtPixel);
 
 
 }
@@ -151,4 +156,34 @@ void MainWindow::updatePixelMarkers()
 
     m_imageWidget->setHotspots(m_manager->hotspots()); // repinta todos con color actualizado
 
+}
+
+void MainWindow::changeHotspotName()
+{
+    QListWidgetItem* item = m_hotspotsList->currentItem();
+    if (!item) return;
+
+    int index = m_hotspotsList->row(item);
+    if (index < 0 || index >= m_manager->hotspotCount()) return;
+
+    const ImagePoint& hotspot = m_manager->hotspots().at(index);
+
+    bool ok;
+    QString text = QInputDialog::getText(this, "Cambiar nombre",
+        "Nuevo nombre del hotspot:", QLineEdit::Normal, hotspot.name(), &ok);
+    if (!ok || text.isEmpty()) return;
+
+    m_manager->setHotspotName(hotspot.id(), text);
+}
+
+void MainWindow::onRightClickAtPixel(const QPoint& pixel)
+{
+    bool ok;
+    QString text = QInputDialog::getText(this, tr("Nombre del hotspot"),
+                                         tr("Introduce el nombre del punto caliente:"), QLineEdit::Normal, QString(), &ok);
+
+    if (!ok || text.isEmpty())
+        text = QString("Hotspot %1").arg(m_manager->hotspotCount() + 1);
+
+    m_manager->addPixelWithName(pixel, text);  // <-- añade el hotspot con nombre
 }
