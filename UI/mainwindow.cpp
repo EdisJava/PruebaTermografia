@@ -1,193 +1,653 @@
+/**
+ * @file mainwindow.cpp
+ * @brief Implementación de la ventana principal de DALIA
+ *
+ * Sistema de visualización termográfica con soporte para:
+ * - Visualización de mapas de calor en tiempo real
+ * - Marcado manual de puntos de interés
+ * - Análisis interactivo de temperaturas
+ * - Gestión de múltiples termogramas
+ */
+
 #include "mainwindow.h"
 #include "ui_mainwindow.h"
+
 #include <QMouseEvent>
 #include <QPainter>
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QInputDialog>
+#include <QDateTime>
+#include <QMenu>
+#include <QDebug>
+#include <QColor>
+#include <QLinearGradient>
+#include <QTextStream>
+#include <QPainterPath>
+#include <QToolTip>
+#include <QtMath>
+
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
     , ui(new Ui::MainWindow)
     , m_manager(new TermografiaManager(this))
+    , m_opacidadTermica(0.7)
+    , m_umbralAlarma(60.0f)
+    , m_mostrarMaximoAuto(true)
+    , m_puntoMaximoX(-1)
+    , m_puntoMaximoY(-1)
+    , m_puntoMaximoTemp(0.0f)
 {
     ui->setupUi(this);
 
+    qDebug() << "Inicializando MainWindow...";
+
+    // =================================================================
+    // CONFIGURACIÓN DE COMPONENTES UI
+    // =================================================================
+
+    // Label de imagen: mantener proporción al redimensionar
+    ui->labelImagen->setScaledContents(false);
+    ui->labelImagen->setAlignment(Qt::AlignCenter);
     ui->labelImagen->setMouseTracking(true);
     ui->labelImagen->installEventFilter(this);
 
-    // Conexiones de UI
-    connect(ui->actionImportar_termogramas, &QAction::triggered,
+    // Label de rampa de colores: permitir escalado automático
+    ui->labelRampa->setScaledContents(true);
+
+    // =================================================================
+    // CONFIGURACIÓN DE CONTROLES
+    // =================================================================
+
+    // Slider de opacidad
+    ui->sliderOpacidad->setRange(0, 100);
+    ui->sliderOpacidad->setValue(70);
+
+    // =================================================================
+    // CONEXIONES DE SEÑALES Y SLOTS
+    // =================================================================
+
+    // Botón importar
+    connect(ui->btnImportar, &QPushButton::clicked,
             this, &MainWindow::on_actionImportar_termogramas_triggered);
 
+    // Lista de termogramas
     connect(ui->listTermogramas, &QListWidget::currentRowChanged,
             this, &MainWindow::seleccionarTermograma);
 
-    connect(ui->btnImportar, &QPushButton::clicked,
-        this, &MainWindow::on_actionImportar_termogramas_triggered);
+    // Slider de opacidad
+    connect(ui->sliderOpacidad, &QSlider::valueChanged, this, [this](int v) {
+        m_opacidadTermica = v / 100.0;
+        ui->lblOpacidadVal->setText(QString("%1%").arg(v));
+        dibujarCapaTermografica();
+    });
 
-    connect(ui->actionImportar_termogramas, &QAction::triggered,
-        this, &MainWindow::on_actionImportar_termogramas_triggered);
+    // =================================================================
+    // TIMER PARA BARRA DE ESTADO
+    // =================================================================
+
+    m_timerEstado = new QTimer(this);
+    connect(m_timerEstado, &QTimer::timeout, this, &MainWindow::actualizarRelojEstado);
+    m_timerEstado->start(1000);
+
+    // =================================================================
+    // INICIALIZACIÓN FINAL
+    // =================================================================
+
+    pintarLeyendaColores();
+    statusBar()->showMessage("✓ Sistema DALIA iniciado correctamente", 3000);
+
+    qDebug() << "MainWindow inicializado correctamente";
 }
 
 MainWindow::~MainWindow() {
     delete ui;
+    qDebug() << "MainWindow destruido";
 }
 
-bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
-    if (obj == ui->labelImagen && event->type() == QEvent::MouseMove) {
-        QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
-        mostrarInfoPunto(mouseEvent->pos());
+// =============================================================================
+// SECCIÓN: RENDERIZADO Y VISUALIZACIÓN
+// =============================================================================
+
+void MainWindow::resizeEvent(QResizeEvent *event) {
+    QMainWindow::resizeEvent(event);
+
+    // Redibujar al cambiar tamaño de ventana
+    if (m_manager->obtenerTermogramaActivo()) {
+        dibujarCapaTermografica();
     }
-    return QMainWindow::eventFilter(obj, event);
-}
-
-void MainWindow::mostrarInfoPunto(QPoint pos) {
-    Termograma* t = m_manager->obtenerTermogramaActivo();
-    if (!t || t->matrizDatos.isEmpty() || m_currentPixmap.isNull()) return;
-
-    // 1. Mapeo de coordenadas Pantalla -> Matriz de Datos (200x150)
-    double factorX = static_cast<double>(t->ancho) / ui->labelImagen->width();
-    double factorY = static_cast<double>(t->alto) / ui->labelImagen->height();
-
-    int x = qBound(0, static_cast<int>(pos.x() * factorX), t->ancho - 1);
-    int y = qBound(0, static_cast<int>(pos.y() * factorY), t->alto - 1);
-
-    float temp = t->getTemperatura(x, y);
-
-    // 2. Actualizar los QLineEdit inferiores (usando tus nombres reales del UI)
-    ui->txtPixel->setText(QString("[%1, %2]").arg(x).arg(y));
-    ui->txtTemp->setText(QString("%1 °C").arg(temp, 0, 'f', 1));
-
-    // 3. Dibujar la mira dinámica sin parpadeo
-    QPixmap overlay = m_currentPixmap.scaled(ui->labelImagen->size(), Qt::IgnoreAspectRatio);
-    QPainter painter(&overlay);
-    painter.setPen(QPen(Qt::yellow, 1));
-
-    // Cruz de mira
-    painter.drawLine(pos.x() - 8, pos.y(), pos.x() + 8, pos.y());
-    painter.drawLine(pos.x(), pos.y() - 8, pos.x(), pos.y() + 8);
-
-    // Etiqueta flotante
-    painter.setBrush(QColor(0, 0, 0, 150));
-    painter.drawRect(pos.x() + 10, pos.y() - 25, 60, 18);
-    painter.setPen(Qt::white);
-    painter.drawText(pos.x() + 12, pos.y() - 12, QString("%1°C").arg(temp, 0, 'f', 1));
-
-    ui->labelImagen->setPixmap(overlay);
 }
 
 void MainWindow::dibujarCapaTermografica() {
     Termograma* t = m_manager->obtenerTermogramaActivo();
+
     if (!t || t->matrizDatos.isEmpty()) {
-        qDebug() << "Error: No hay datos térmicos para dibujar.";
+        ui->labelImagen->clear();
+        ui->labelImagen->setText("No hay datos termográficos cargados");
         return;
     }
 
-    // 1. Encontrar Max y Min y sus posiciones exactas en la matriz
-    float maxImg = -999.0f;
-    float minImg = 999.0f;
-    QPoint pMax(0,0), pMin(0,0);
+    // =========================================================================
+    // PASO 1: CALCULAR ESTADÍSTICAS TÉRMICAS
+    // =========================================================================
 
-    for (int y = 0; y < t->alto; ++y) {
-        for (int x = 0; x < t->ancho; ++x) {
-            float temp = t->getTemperatura(x, y);
-            if (temp > maxImg) { maxImg = temp; pMax = QPoint(x, y); }
-            if (temp < minImg) { minImg = temp; pMin = QPoint(x, y); }
+    float maxT = -999.0f;
+    float minT = 999.0f;
+
+    for (float v : t->matrizDatos) {
+        if (v > maxT) maxT = v;
+        if (v < minT) minT = v;
+    }
+
+    // Actualizar etiquetas
+    ui->lblMaxTemp->setText(QString("MAX: %1 °C").arg(maxT, 0, 'f', 1));
+    ui->lblMinTemp->setText(QString("MIN: %1 °C").arg(minT, 0, 'f', 1));
+
+    // =========================================================================
+    // PASO 2: CREAR CANVAS EN RESOLUCIÓN NATIVA
+    // =========================================================================
+
+    QImage canvas(t->ancho, t->alto, QImage::Format_ARGB32);
+    canvas.fill(Qt::black);
+
+    QPainter painter(&canvas);
+    painter.setRenderHint(QPainter::Antialiasing, true);
+    painter.setRenderHint(QPainter::TextAntialiasing, true);
+
+    // =========================================================================
+    // CAPA A: IMAGEN DE FONDO (SI EXISTE)
+    // =========================================================================
+
+    QString pathImg = t->rutaFisica;
+    pathImg.replace(".csv", ".jpg").replace(".json", ".jpg").replace(".txt", ".jpg");
+
+    QImage imgFondo(pathImg);
+    if (!imgFondo.isNull()) {
+        painter.drawImage(canvas.rect(), imgFondo);
+    }
+
+    // =========================================================================
+    // CAPA B: MÁSCARA TÉRMICA CON OPACIDAD
+    // =========================================================================
+
+    QImage thermalMask = m_manager->generarImagenVisual(t->id, minT, maxT);
+
+    if (!thermalMask.isNull()) {
+        painter.setOpacity(m_opacidadTermica);
+        painter.drawImage(0, 0, thermalMask);
+        painter.setOpacity(1.0);
+    }
+
+    // =========================================================================
+    // CAPA C: ELEMENTOS VECTORIALES (PUNTOS Y ANOTACIONES)
+    // =========================================================================
+
+    // C.1 - Puntos manuales marcados por el usuario (PRECISIÓN MEJORADA)
+    for (const auto& p : t->listaPuntos) {
+        // Punto PEQUEÑO y PRECISO para análisis de componentes electrónicos
+        // Círculo blanco exterior (borde de contraste)
+        painter.setPen(QPen(Qt::white, 1.5));
+        painter.setBrush(Qt::NoBrush);
+        painter.drawEllipse(QPointF(p.pixelX, p.pixelY), 2.0, 2.0);
+
+        // Círculo amarillo interior (punto de marcado)
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(255, 255, 0));
+        painter.drawEllipse(QPointF(p.pixelX, p.pixelY), 1.5, 1.5);
+
+        // Cruz de precisión (opcional, muy fina)
+        painter.setPen(QPen(Qt::white, 0.5));
+        painter.drawLine(QPointF(p.pixelX - 3, p.pixelY), QPointF(p.pixelX + 3, p.pixelY));
+        painter.drawLine(QPointF(p.pixelX, p.pixelY - 3), QPointF(p.pixelX, p.pixelY + 3));
+
+        // Etiqueta SOLO visible cuando hay espacio (para no saturar)
+        // En trabajo de precisión, es mejor mostrar tooltip
+        if (t->listaPuntos.size() <= 5) {  // Solo si hay pocos puntos
+            // Preparar texto de la etiqueta (compacto)
+            QString texto = QString("%1: %2°")
+                            .arg(p.comentario)
+                            .arg(p.temperaturaMax, 0, 'f', 1);
+
+            // Fuente pequeña y legible
+            QFont font("Arial", 6);
+            painter.setFont(font);
+            QFontMetrics fm(font);
+
+            // Calcular dimensiones
+            int textWidth = fm.horizontalAdvance(texto) + 6;
+            int textHeight = fm.height() + 2;
+
+            // Fondo compacto
+            painter.fillRect(p.pixelX + 5, p.pixelY - textHeight - 1,
+                            textWidth, textHeight,
+                            QColor(0, 0, 0, 200));
+
+            // Texto amarillo
+            painter.setPen(QColor(255, 255, 0));
+            painter.drawText(p.pixelX + 8, p.pixelY - 3, texto);
         }
     }
 
-    // Actualizar labels de la derecha
-    ui->lblMaxTemp->setText(QString("Max: %1 °C").arg(maxImg, 0, 'f', 1));
-    ui->lblMinTemp->setText(QString("Min: %1 °C").arg(minImg, 0, 'f', 1));
+    // C.2 - Punto de temperatura máxima automático (ULTRA PRECISO)
+    if (m_mostrarMaximoAuto) {
+        // Buscar posición del máximo
+        for (int y = 0; y < t->alto; ++y) {
+            for (int x = 0; x < t->ancho; ++x) {
+                float temp = t->getTemperatura(x, y);
 
-    // 2. Generar la imagen base
-    QImage base = m_manager->generarImagenVisual(t->id, minImg, maxImg);
-    if (base.isNull()) return;
+                if (qAbs(temp - maxT) < 0.01f) {
+                    // Guardar posición del punto máximo para tooltip
+                    m_puntoMaximoX = x;
+                    m_puntoMaximoY = y;
+                    m_puntoMaximoTemp = maxT;
 
-    QPixmap pixmap = QPixmap::fromImage(base);
-    QPainter painter(&pixmap);
-    painter.setRenderHint(QPainter::Antialiasing);
+                    // Punto MINIMALISTA de alta precisión
+                    // Círculo exterior blanco muy fino (contraste)
+                    painter.setPen(QPen(Qt::white, 1.2));
+                    painter.setBrush(Qt::NoBrush);
+                    painter.drawEllipse(QPointF(x, y), 2.5, 2.5);
 
-    // Dibujar marcadores Max (Rojo) y Min (Cian)
-    painter.setPen(QPen(Qt::red, 1));
-    painter.drawLine(pMax.x()-3, pMax.y(), pMax.x()+3, pMax.y());
-    painter.drawLine(pMax.x(), pMax.y()-3, pMax.x(), pMax.y()+3);
+                    // Círculo rojo brillante ultra pequeño
+                    painter.setPen(Qt::NoPen);
+                    painter.setBrush(QColor(255, 30, 30)); // Rojo intenso
+                    painter.drawEllipse(QPointF(x, y), 2.0, 2.0);
 
-    painter.setPen(QPen(Qt::cyan, 1));
-    painter.drawLine(pMin.x()-3, pMin.y(), pMin.x()+3, pMin.y());
-    painter.drawLine(pMin.x(), pMin.y()-3, pMin.x(), pMin.y()+3);
+                    // Punto central blanco (píxel exacto)
+                    painter.setBrush(Qt::white);
+                    painter.drawEllipse(QPointF(x, y), 0.8, 0.8);
 
-    // Hotspots automáticos
-    AnalysisEngine engine;
-    float umbralSugerencia = maxImg * 0.92f;
-    QList<PuntoCaliente> puntos = engine.detectarPuntosCalientesAuto(*t, umbralSugerencia);
-
-    painter.setPen(QPen(Qt::green, 1));
-    for (const PuntoCaliente &p : std::as_const(puntos)) {
-        painter.drawEllipse(QPoint(p.pixelX, p.pixelY), 2, 2);
+                    goto encontrado_maximo;
+                }
+            }
+        }
     }
+    encontrado_maximo:
+
     painter.end();
 
-    // GUARDADO CRÍTICO: Guardamos la imagen original 200x150 procesada
-    m_currentPixmap = pixmap;
+    // =========================================================================
+    // PASO 3: ESCALAR Y MOSTRAR EN EL LABEL
+    // =========================================================================
 
-    // MOSTRAR: Estiramos la imagen para que llene TODO el label (IgnoreAspectRatio)
-    ui->labelImagen->setPixmap(m_currentPixmap.scaled(ui->labelImagen->size(),
-                                            Qt::IgnoreAspectRatio,
-                                            Qt::SmoothTransformation));
+    m_currentPixmap = QPixmap::fromImage(canvas);
 
-    pintarLeyendaColores();
+    // Escalar manteniendo proporción
+    QPixmap displayMap = m_currentPixmap.scaled(
+        ui->labelImagen->size(),
+        Qt::KeepAspectRatio,
+        Qt::SmoothTransformation
+    );
+
+    ui->labelImagen->setPixmap(displayMap);
 }
 
 void MainWindow::pintarLeyendaColores() {
-    int h = ui->labelRampa->height() > 0 ? ui->labelRampa->height() : 300;
-    int w = ui->labelRampa->width() > 0 ? ui->labelRampa->width() : 50;
+    // Crear rampa de color fija (será escalada automáticamente)
+    QImage ramp(1, 512, QImage::Format_RGB32);
+    QPainter p(&ramp);
 
-    QPixmap barra(w, h);
-    QPainter p(&barra);
-    QLinearGradient grad(0, h, 0, 0);
-    grad.setColorAt(0.0, Qt::blue);
-    grad.setColorAt(0.5, Qt::red);
-    grad.setColorAt(1.0, Qt::white);
+    // Gradiente térmico: Azul → Cian → Verde → Amarillo → Rojo
+    QLinearGradient gradient(0, 512, 0, 0);
+    gradient.setColorAt(0.0, QColor(0, 0, 255));     // Azul
+    gradient.setColorAt(0.25, QColor(0, 255, 255));  // Cian
+    gradient.setColorAt(0.5, QColor(0, 255, 0));     // Verde
+    gradient.setColorAt(0.75, QColor(255, 255, 0));  // Amarillo
+    gradient.setColorAt(1.0, QColor(255, 0, 0));     // Rojo
 
-    p.fillRect(barra.rect(), grad);
+    p.fillRect(ramp.rect(), gradient);
     p.end();
-    ui->labelRampa->setPixmap(barra);
+
+    ui->labelRampa->setPixmap(QPixmap::fromImage(ramp));
 }
 
-void MainWindow::on_actionImportar_termogramas_triggered() {
-    QString fileName = QFileDialog::getOpenFileName(this, "Abrir Manifiesto", "", "JSON (*.json)");
-    if (fileName.isEmpty()) return;
+// =============================================================================
+// SECCIÓN: INTERACCIÓN CON EL USUARIO
+// =============================================================================
 
-    IngestionEngine::ResumenCarga res = m_manager->cargarLoteDesdeJSON(fileName);
+QPoint MainWindow::getCoordenadaImagen(QPoint posMouse) {
+    if (m_currentPixmap.isNull() || ui->labelImagen->pixmap().isNull()) {
+        return QPoint(-1, -1);
+    }
 
-    if (res.totalCargados > 0) {
-        ui->listTermogramas->clear();
+    // Calcular offset del pixmap dentro del label (por centrado)
+    QSize labelSize = ui->labelImagen->size();
+    QSize pixmapSize = ui->labelImagen->pixmap().size();
 
-        // RECORRER LA LISTA CARGADA PARA USAR LOS NOMBRES DEL JSON
-        for(int i = 0; i < res.totalCargados; ++i) {
-            Termograma* t = m_manager->obtenerTermogramaActivo(i);
-            if(t) {
-                ui->listTermogramas->addItem(t->idAlternativo);
-            }
+    int offsetX = (labelSize.width() - pixmapSize.width()) / 2;
+    int offsetY = (labelSize.height() - pixmapSize.height()) / 2;
+
+    // Coordenada relativa al inicio de la imagen
+    int x_rel = posMouse.x() - offsetX;
+    int y_rel = posMouse.y() - offsetY;
+
+    // Obtener dimensiones originales
+    Termograma* t = m_manager->obtenerTermogramaActivo();
+    if (!t) return QPoint(-1, -1);
+
+    // Calcular factores de escala
+    double factorX = static_cast<double>(t->ancho) / pixmapSize.width();
+    double factorY = static_cast<double>(t->alto) / pixmapSize.height();
+
+    // Coordenadas en la imagen original
+    int finalX = static_cast<int>(x_rel * factorX);
+    int finalY = static_cast<int>(y_rel * factorY);
+
+    // Validar límites
+    if (finalX < 0 || finalX >= t->ancho || finalY < 0 || finalY >= t->alto) {
+        return QPoint(-1, -1);
+    }
+
+    return QPoint(finalX, finalY);
+}
+
+void MainWindow::mostrarInfoPunto(QPoint pos) {
+    Termograma* t = m_manager->obtenerTermogramaActivo();
+    QPoint realPos = getCoordenadaImagen(pos);
+
+    if (realPos.x() < 0 || !t) {
+        ui->txtPixel->setText("—");
+        ui->txtTemp->setText("—");
+        ui->labelImagen->setToolTip("");
+        return;
+    }
+
+    float temp = t->getTemperatura(realPos.x(), realPos.y());
+
+    // Primero: Verificar si está cerca del punto máximo
+    bool sobrePuntoMaximo = false;
+    if (m_puntoMaximoX >= 0 && m_puntoMaximoY >= 0) {
+        int dx = realPos.x() - m_puntoMaximoX;
+        int dy = realPos.y() - m_puntoMaximoY;
+        int distancia = qSqrt(dx * dx + dy * dy);
+
+        if (distancia <= 6) {  // Radio reducido para precisión
+            sobrePuntoMaximo = true;
         }
-        ui->listTermogramas->setCurrentRow(0);
+    }
+
+    // Segundo: Verificar si está cerca de algún punto manual
+    PuntoCaliente* puntoManualCercano = nullptr;
+    int distanciaMinima = 9999;
+
+    for (auto& p : t->listaPuntos) {
+        int dx = realPos.x() - p.pixelX;
+        int dy = realPos.y() - p.pixelY;
+        int distancia = qSqrt(dx * dx + dy * dy);
+
+        if (distancia <= 6 && distancia < distanciaMinima) {  // Radio 6px
+            puntoManualCercano = &p;
+            distanciaMinima = distancia;
+        }
+    }
+
+    if (sobrePuntoMaximo) {
+        // Mostrar información del punto máximo
+        ui->txtPixel->setText(QString("(%1, %2) [MAX]").arg(m_puntoMaximoX).arg(m_puntoMaximoY));
+        ui->txtTemp->setText(QString("%1 °C").arg(m_puntoMaximoTemp, 0, 'f', 2));
+
+        QString tooltip = QString(
+            "<div style='background-color: #c0392b; color: white; padding: 8px; border-radius: 4px;'>"
+            "<b style='font-size: 14px;'>🔥 Punto Máximo</b><br>"
+            "<span style='font-size: 18px; font-weight: bold;'>%1 °C</span><br>"
+            "<span style='font-size: 11px;'>Coordenadas: (%2, %3)</span>"
+            "</div>"
+        ).arg(m_puntoMaximoTemp, 0, 'f', 1).arg(m_puntoMaximoX).arg(m_puntoMaximoY);
+
+        ui->labelImagen->setToolTip(tooltip);
+
+    } else if (puntoManualCercano) {
+        // Mostrar información del punto manual
+        ui->txtPixel->setText(QString("(%1, %2) [%3]")
+                             .arg(puntoManualCercano->pixelX)
+                             .arg(puntoManualCercano->pixelY)
+                             .arg(puntoManualCercano->comentario));
+        ui->txtTemp->setText(QString("%1 °C").arg(puntoManualCercano->temperaturaMax, 0, 'f', 2));
+
+        QString tooltip = QString(
+            "<div style='background-color: #f39c12; color: white; padding: 8px; border-radius: 4px;'>"
+            "<b style='font-size: 14px;'>📍 %1</b><br>"
+            "<span style='font-size: 16px; font-weight: bold;'>%2 °C</span><br>"
+            "<span style='font-size: 11px;'>Posición: (%3, %4)</span>"
+            "</div>"
+        ).arg(puntoManualCercano->comentario)
+         .arg(puntoManualCercano->temperaturaMax, 0, 'f', 1)
+         .arg(puntoManualCercano->pixelX)
+         .arg(puntoManualCercano->pixelY);
+
+        ui->labelImagen->setToolTip(tooltip);
+
+    } else {
+        // Información normal del píxel bajo el cursor
+        ui->txtPixel->setText(QString("(%1, %2)").arg(realPos.x()).arg(realPos.y()));
+        ui->txtTemp->setText(QString("%1 °C").arg(temp, 0, 'f', 2));
+        ui->labelImagen->setToolTip("");
     }
 }
-void MainWindow::seleccionarTermograma(int index) {
-    if (index < 0) return;
 
-    // Obtenemos el termograma (el manager debe tener la lista cargada)
-    Termograma* t = m_manager->obtenerTermogramaActivo(index);
+void MainWindow::marcarPuntoManual(QPoint pos) {
+    Termograma* t = m_manager->obtenerTermogramaActivo();
+    QPoint realPos = getCoordenadaImagen(pos);
 
-    if (t) {
-        // Mostramos las coordenadas del JSON en algún label o consola
-        qDebug() << "Visualizando elemento:" << t->idAlternativo;
-        qDebug() << "GPS:" << t->coordX << t->coordY << t->coordZ;
+    if (realPos.x() < 0 || !t) {
+        QMessageBox::warning(this, "Error", "Coordenada inválida");
+        return;
+    }
 
-        // Aquí podrías actualizar un label de "Ubicación"
-        // ui->lblGPS->setText(QString("X:%1 Y:%2").arg(t->coordX).arg(t->coordY));
+    // Solicitar nombre al usuario
+    bool ok;
+    QString nombre = QInputDialog::getText(
+        this,
+        "Marcar Punto de Análisis",
+        "Ingrese un nombre identificativo:",
+        QLineEdit::Normal,
+        QString("P%1").arg(t->listaPuntos.size() + 1),
+        &ok
+    );
+
+    if (ok && !nombre.isEmpty()) {
+        PuntoCaliente p;
+        p.pixelX = realPos.x();
+        p.pixelY = realPos.y();
+        p.temperaturaMax = t->getTemperatura(realPos.x(), realPos.y());
+        p.comentario = nombre;
+        p.tipo = TipoPunto::MANUAL;
+        p.validado = true;
+
+        t->listaPuntos.append(p);
+
+        qDebug() << "Punto marcado:" << nombre
+                 << "en" << realPos
+                 << "con temperatura" << p.temperaturaMax << "°C";
 
         dibujarCapaTermografica();
     }
+}
+
+void MainWindow::eliminarPuntoCercano(QPoint pos) {
+    Termograma* t = m_manager->obtenerTermogramaActivo();
+    QPoint realPos = getCoordenadaImagen(pos);
+
+    if (realPos.x() < 0 || !t) return;
+
+    // Buscar punto cercano (radio de 8 píxeles)
+    const int RADIO_BUSQUEDA = 8;
+
+    for (int i = 0; i < t->listaPuntos.size(); ++i) {
+        int dx = t->listaPuntos[i].pixelX - realPos.x();
+        int dy = t->listaPuntos[i].pixelY - realPos.y();
+        int distancia = qSqrt(dx * dx + dy * dy);
+
+        if (distancia <= RADIO_BUSQUEDA) {
+            QString nombre = t->listaPuntos[i].comentario;
+            t->listaPuntos.removeAt(i);
+
+            qDebug() << "Punto eliminado:" << nombre;
+            statusBar()->showMessage(QString("Punto '%1' eliminado").arg(nombre), 2000);
+
+            dibujarCapaTermografica();
+            return;
+        }
+    }
+
+    statusBar()->showMessage("No hay puntos cercanos para eliminar", 2000);
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    if (obj == ui->labelImagen) {
+        QMouseEvent *mouseEvent = static_cast<QMouseEvent*>(event);
+
+        // Movimiento del ratón: mostrar info en tiempo real
+        if (event->type() == QEvent::MouseMove) {
+            mostrarInfoPunto(mouseEvent->pos());
+            return true;
+        }
+
+        // Click derecho: menú contextual
+        if (event->type() == QEvent::MouseButtonPress &&
+            mouseEvent->button() == Qt::RightButton) {
+
+            QMenu menu(this);
+            menu.setStyleSheet("QMenu { background-color: white; padding: 5px; }"
+                             "QMenu::item { padding: 8px 20px; }"
+                             "QMenu::item:selected { background-color: #3498db; color: white; }");
+
+            QAction *actAnalizar = menu.addAction("➕ Analizar este punto");
+            QAction *actBorrar = menu.addAction("❌ Borrar punto cercano");
+            menu.addSeparator();
+            QAction *actCancelar = menu.addAction("↩️ Cancelar");
+
+            QAction *selected = menu.exec(mouseEvent->globalPosition().toPoint());
+
+            if (selected == actAnalizar) {
+                marcarPuntoManual(mouseEvent->pos());
+            } else if (selected == actBorrar) {
+                eliminarPuntoCercano(mouseEvent->pos());
+            }
+
+            return true;
+        }
+    }
+
+    return QMainWindow::eventFilter(obj, event);
+}
+
+// =============================================================================
+// SECCIÓN: IMPORTACIÓN Y GESTIÓN DE DATOS
+// =============================================================================
+
+void MainWindow::on_actionImportar_termogramas_triggered() {
+    QString path = QFileDialog::getOpenFileName(
+        this,
+        "Seleccionar archivo JSON de dataset",
+        QDir::currentPath(),
+        "Archivos JSON (*.json);;Todos los archivos (*.*)"
+    );
+
+    if (path.isEmpty()) return;
+
+    qDebug() << "Importando dataset desde:" << path;
+    statusBar()->showMessage("Cargando dataset...");
+
+    IngestionEngine::ResumenCarga resultado = m_manager->cargarLoteDesdeJSON(path);
+
+    if (resultado.totalCargados > 0) {
+        // Actualizar lista visual
+        ui->listTermogramas->clear();
+
+        for (int i = 0; i < resultado.totalCargados; ++i) {
+            Termograma* t = m_manager->obtenerTermogramaActivo(i);
+            if (t) {
+                ui->listTermogramas->addItem(t->idAlternativo);
+            }
+        }
+
+        // Seleccionar el primero automáticamente
+        ui->listTermogramas->setCurrentRow(0);
+
+        QString mensaje = QString("✓ Cargados %1 termogramas correctamente")
+                         .arg(resultado.totalCargados);
+
+        if (resultado.errores > 0) {
+            mensaje += QString(" (%1 errores)").arg(resultado.errores);
+        }
+
+        statusBar()->showMessage(mensaje, 5000);
+
+        QMessageBox::information(this, "Importación Exitosa", mensaje);
+    } else {
+        QString mensaje = "✗ No se pudieron cargar termogramas";
+        statusBar()->showMessage(mensaje, 5000);
+        QMessageBox::warning(this, "Error", mensaje);
+    }
+}
+
+void MainWindow::seleccionarTermograma(int index) {
+    if (index >= 0) {
+        m_manager->setIndiceActivo(index);
+
+        Termograma* t = m_manager->obtenerTermogramaActivo();
+        if (t) {
+            qDebug() << "Termograma seleccionado:" << t->idAlternativo;
+            statusBar()->showMessage(QString("Visualizando: %1").arg(t->idAlternativo));
+        }
+
+        dibujarCapaTermografica();
+    }
+}
+
+// =============================================================================
+// SECCIÓN: FUNCIONES AUXILIARES
+// =============================================================================
+
+void MainWindow::on_btnVerLista_clicked() {
+    Termograma* t = m_manager->obtenerTermogramaActivo();
+
+    if (!t) {
+        QMessageBox::information(this, "Inventario", "No hay termograma activo");
+        return;
+    }
+
+    if (t->listaPuntos.isEmpty()) {
+        QMessageBox::information(this, "Inventario Crítico",
+                               "No hay puntos marcados en este termograma");
+        return;
+    }
+
+    QString lista = QString("Puntos marcados en '%1':\n\n").arg(t->idAlternativo);
+
+    for (int i = 0; i < t->listaPuntos.size(); ++i) {
+        const auto& p = t->listaPuntos[i];
+        lista += QString("%1. %2 - %3°C (x:%4, y:%5)\n")
+                .arg(i + 1)
+                .arg(p.comentario)
+                .arg(p.temperaturaMax, 0, 'f', 1)
+                .arg(p.pixelX)
+                .arg(p.pixelY);
+    }
+
+    QMessageBox::information(this, "Inventario Crítico", lista);
+}
+
+void MainWindow::actualizarRelojEstado() {
+    QString hora = QDateTime::currentDateTime().toString("HH:mm:ss");
+    statusBar()->showMessage(QString("DALIA System | %1").arg(hora));
+}
+
+// Funciones placeholder para futuras implementaciones
+void MainWindow::calcularEstadisticasArea() {
+    // TODO: Implementar cálculo de estadísticas en área seleccionada
+}
+
+void MainWindow::exportarDatosAnalisis() {
+    // TODO: Implementar exportación a CSV/Excel
+}
+
+void MainWindow::exportarReportePDF() {
+    // TODO: Implementar generación de informe PDF
+}
+
+void MainWindow::aplicarFiltroUmbral(int valor) {
+    Q_UNUSED(valor);
+    // TODO: Implementar filtro de umbral de temperatura
 }

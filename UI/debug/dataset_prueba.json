@@ -1,0 +1,37 @@
+{
+    "Apoyo": [
+        {
+            "nombre": "1",
+            "termograma": {
+                "coordenada": {
+                    "x": 40.4178,
+                    "y": -3.7028000000000003,
+                    "z": 660
+                },
+                "url": "data_640x480_1.csv"
+            }
+        },
+        {
+            "nombre": "2",
+            "termograma": {
+                "coordenada": {
+                    "x": 40.418800000000005,
+                    "y": -3.7018000000000004,
+                    "z": 670
+                },
+                "url": "data_640x480_2.csv"
+            }
+        },
+        {
+            "nombre": "3",
+            "termograma": {
+                "coordenada": {
+                    "x": 40.4198,
+                    "y": -3.7008,
+                    "z": 680
+                },
+                "url": "data_640x480_3.csv"
+            }
+        }
+    ]
+}

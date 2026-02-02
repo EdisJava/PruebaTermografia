@@ -2,8 +2,8 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
-#include <QPainter>
 #include <QPixmap>
+#include <QTimer>
 #include "termografiamanager.h"
 
 QT_BEGIN_NAMESPACE
@@ -18,22 +18,46 @@ public:
     ~MainWindow();
 
 protected:
+    void resizeEvent(QResizeEvent *event) override;
     bool eventFilter(QObject *obj, QEvent *event) override;
 
 private slots:
-    // Solo funciones que se conectan a señales
     void on_actionImportar_termogramas_triggered();
     void seleccionarTermograma(int index);
+    void on_btnVerLista_clicked();
 
 private:
     Ui::MainWindow *ui;
-    TermografiaManager* m_manager;
+    TermografiaManager *m_manager;
     QPixmap m_currentPixmap;
+    QTimer *m_timerEstado;
 
-    // FUNCIONES INTERNAS
-    void mostrarInfoPunto(QPoint pos);
+    // Parámetros de visualización
+    double m_opacidadTermica;
+    float m_umbralAlarma;
+    bool m_mostrarMaximoAuto;
+
+    // Coordenadas del punto máximo (para tooltip)
+    int m_puntoMaximoX;
+    int m_puntoMaximoY;
+    float m_puntoMaximoTemp;
+
+    // Métodos de renderizado
     void dibujarCapaTermografica();
     void pintarLeyendaColores();
+
+    // Métodos de interacción
+    QPoint getCoordenadaImagen(QPoint posMouse);
+    void mostrarInfoPunto(QPoint pos);
+    void marcarPuntoManual(QPoint pos);
+    void eliminarPuntoCercano(QPoint pos);
+
+    // Métodos auxiliares
+    void actualizarRelojEstado();
+    void calcularEstadisticasArea();
+    void exportarDatosAnalisis();
+    void exportarReportePDF();
+    void aplicarFiltroUmbral(int valor);
 };
 
-#endif
+#endif // MAINWINDOW_H

@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QImage>
+#include <QList>
 #include "entities.h"
 #include "engines.h"
 #include "daos.h"
@@ -14,12 +15,14 @@ class CORE_EXPORT TermografiaManager : public QObject {
 public:
     explicit TermografiaManager(QObject *parent = nullptr);
 
-    // Métodos principales
-    IngestionEngine::ResumenCarga cargarLoteDesdeJSON(const QString& rutaJson);
-    Termograma* obtenerTermogramaCompleto(long id);
+    // Getters y Setters de estado
+    void setIndiceActivo(int index);
     Termograma* obtenerTermogramaActivo();
     Termograma* obtenerTermogramaActivo(int index);
+    Termograma* obtenerTermogramaCompleto(long id);
 
+    // Lógica de Negocio
+    IngestionEngine::ResumenCarga cargarLoteDesdeJSON(const QString& rutaJson);
     void guardarPuntoCaliente(PuntoCaliente punto, long idTermograma);
     void exportarReporte(int formatoEnum, long idCampaña);
 
@@ -32,8 +35,9 @@ private:
     TermogramaDAO m_termogramaDAO;
     PuntoCalienteDAO m_puntoCalienteDAO;
     ElementoRedDAO m_elementoRedDAO;
-    Termograma* m_termogramaActivo;
+
     QList<Termograma> m_listaTermogramas;
+    Termograma* m_termogramaActivo = nullptr;
     int m_indiceActivo = -1;
 };
 
