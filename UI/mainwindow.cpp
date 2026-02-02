@@ -8,6 +8,7 @@
 #include <QMessageBox>
 #include <QPushButton>
 #include <QLabel>
+#include <QDebug>
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -19,8 +20,8 @@ MainWindow::MainWindow(QWidget *parent)
     // Conectar señales
     connect(m_imageWidget, &ImageWidget::rightClicked,
             m_manager, &ImagePointManager::addPixelToCurrentHotspot);
-    connect(m_manager, &ImagePointManager::hotspotUpdated,
-            this, &MainWindow::onHotspotUpdated);
+    connect(m_manager, SIGNAL(hotspotUpdated(ImagePoint)),
+            this, SLOT(onHotspotUpdated(ImagePoint)));
     connect(m_manager, &ImagePointManager::hotspotsCleared,
             this, &MainWindow::onHotspotsCleared);
 }
@@ -105,9 +106,9 @@ void MainWindow::clearHotspots()
     m_manager->clearHotspots();
 }
 
-
 void MainWindow::onHotspotUpdated(const ImagePoint& hotspot)
 {
+    qDebug() << "onHotspotUpdated called. Hotspot ID:" << hotspot.id() << "Pixels:" << hotspot.pixelCount();
     Q_UNUSED(hotspot);
     updateHotspotsList();
     updatePixelMarkers();
@@ -126,6 +127,8 @@ void MainWindow::updateHotspotsList()
     for (const ImagePoint& hotspot : m_manager->hotspots()) {
         m_hotspotsList->addItem(hotspot.toString());
     }
+    qDebug() << "Hotspots in manager:" << m_manager->hotspots().size();
+
 }
 
 void MainWindow::updatePixelMarkers()

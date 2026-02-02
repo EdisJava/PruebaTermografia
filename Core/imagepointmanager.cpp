@@ -1,10 +1,13 @@
 #include "imagepointmanager.h"
+#include <QDebug>
 
 ImagePointManager::ImagePointManager(QObject *parent)
     : QObject(parent)
     , m_currentHotspot(nullptr)
     , m_nextId(1)
 {
+    qDebug() << "MetaObject class:" << metaObject()->className();
+
 }
 
 void ImagePointManager::setImage(const QImage& image)
@@ -16,14 +19,22 @@ void ImagePointManager::setImage(const QImage& image)
 
 void ImagePointManager::addPixelToCurrentHotspot(const QPoint& pixel)
 {
+    qDebug() << "addPixelToCurrentHotspot called with pixel:" << pixel;
+
     if (!isValidCoordinate(pixel)) {
+        qDebug() << "Invalid coordinate!";
         return;
     }
+
+    qDebug() << "Creating new hotspot with ID:" << m_nextId;
 
     // Crear un nuevo hotspot para cada píxel
     ImagePoint newHotspot(m_nextId++);
     newHotspot.addPixel(pixel);
     m_hotspots.append(newHotspot);
+
+    qDebug() << "Hotspot created. Total hotspots:" << m_hotspots.size();
+    qDebug() << "Emitting hotspotUpdated signal";
 
     emit hotspotUpdated(m_hotspots.last());
 }

@@ -1,6 +1,7 @@
 #include "imagewidget.h"
 #include <QPainter>
 #include <QMouseEvent>
+#include <QDebug>
 
 ImageWidget::ImageWidget(QWidget *parent)
     : QWidget(parent)
@@ -46,41 +47,6 @@ QPoint ImageWidget::screenToImageCoordinates(const QPoint& screenPos) const
     return QPoint(imgX, imgY);
 }
 
-
-/**
- * Ejemplo:
- *  imagen de 1000x800
- *  Widget en pantalla 500x600
- *  Queremos dibujar el pixel en las coordenadas 750,400 de la imagen
- *
- * widgetAspect = 500/600 = 0.833  (más alto que ancho)
- * imageAspect = 1000/800 = 1.25   (más ancho que alto)
- *
- * tamañowidget es menor a tamaño imagen
- *  imagen mas ancha en proporcion
- *  se ajusta el ancho del widgets y sobran franjas arriba y abajo por el tamaño
- *
- *
- *  CONVERTIR  PIXEL IMAGEN A POSICION REALTIVA
- *  pixel = (750, 400) imagen original
- *
- *  relX = (double)pixel.x() / m_image.width();
- *  relX = 750 / 1000 = 0.75  ← El píxel está al 75% del ancho
- *
- *  relY = (double)pixel.y() / m_image.height();
- *  relY = 400 / 800 = 0.5    ← El píxel está al 50% del alto (centro)
- *
- *
- *  CONVERTIR POSICION RELAIVA A COORDS DE PANTALLA
- *  screenX = imageRect.x() + relX * imageRect.width();
- *  screenX = 0 + 0.75 * 500 = 375  ← 375 píxeles desde la izquierda del widget
- *
- *  screenY = imageRect.y() + relY * imageRect.height();
- *  screenY = 100 + 0.5 * 400 = 300  ← 300 píxeles desde arriba del widget
-
- * */
-
-
 void ImageWidget::paintEvent(QPaintEvent *event)
 {
     Q_UNUSED(event);
@@ -116,13 +82,21 @@ void ImageWidget::paintEvent(QPaintEvent *event)
 
 void ImageWidget::mousePressEvent(QMouseEvent *event)
 {
+    qDebug() << "Mouse pressed, button:" << event->button();
+
     if (event->button() == Qt::RightButton && !m_image.isNull()) {
         QPoint pixel = screenToImageCoordinates(event->pos());
+
+        qDebug() << "Right click detected. Screen pos:" << event->pos() << "Image pixel:" << pixel;
+        qDebug() << "Image size:" << m_image.width() << "x" << m_image.height();
 
         // Verificar que el click está dentro de la imagen
         if (pixel.x() >= 0 && pixel.x() < m_image.width() &&
             pixel.y() >= 0 && pixel.y() < m_image.height()) {
+            qDebug() << "Emitting rightClicked signal with pixel:" << pixel;
             emit rightClicked(pixel);
+        } else {
+            qDebug() << "Pixel out of bounds!";
         }
     }
 
@@ -148,9 +122,45 @@ QRectF ImageWidget::getImageRect() const
     } else {
         // Widget más alto que la imagen
         double scaledHeight = width() / imageAspect;
-        //imageRect= QRectF(x, y, width(), scaledHeight);
         imageRect = QRectF(0, (height() - scaledHeight) / 2, width(), scaledHeight);
     }
 
     return imageRect;
 }
+
+
+
+
+/**
+ * Ejemplo:
+ *  imagen de 1000x800
+ *  Widget en pantalla 500x600
+ *  Queremos dibujar el pixel en las coordenadas 750,400 de la imagen
+ *
+ * widgetAspect = 500/600 = 0.833  (más alto que ancho)
+ * imageAspect = 1000/800 = 1.25   (más ancho que alto)
+ *
+ * tamañowidget es menor a tamaño imagen
+ *  imagen mas ancha en proporcion
+ *  se ajusta el ancho del widgets y sobran franjas arriba y abajo por el tamaño
+ *
+ *
+ *  CONVERTIR  PIXEL IMAGEN A POSICION REALTIVA
+ *  pixel = (750, 400) imagen original
+ *
+ *  relX = (double)pixel.x() / m_image.width();
+ *  relX = 750 / 1000 = 0.75  ← El píxel está al 75% del ancho
+ *
+ *  relY = (double)pixel.y() / m_image.height();
+ *  relY = 400 / 800 = 0.5    ← El píxel está al 50% del alto (centro)
+ *
+ *
+ *  CONVERTIR POSICION RELAIVA A COORDS DE PANTALLA
+ *  screenX = imageRect.x() + relX * imageRect.width();
+ *  screenX = 0 + 0.75 * 500 = 375  ← 375 píxeles desde la izquierda del widget
+ *
+ *  screenY = imageRect.y() + relY * imageRect.height();
+ *  screenY = 100 + 0.5 * 400 = 300  ← 300 píxeles desde arriba del widget
+
+ * */
+
