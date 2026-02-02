@@ -30,6 +30,7 @@ void ImagePointManager::addPixelToCurrentHotspot(const QPoint& pixel)
 
     // Crear un nuevo hotspot para cada píxel
     ImagePoint newHotspot(m_nextId++);
+    newHotspot.setColor(m_globalHotspotColor);  // <-- color global
     newHotspot.addPixel(pixel);
     m_hotspots.append(newHotspot);
 
@@ -63,3 +64,16 @@ bool ImagePointManager::isValidCoordinate(const QPoint& pixel) const
     return pixel.x() >= 0 && pixel.x() < m_image.width() &&
            pixel.y() >= 0 && pixel.y() < m_image.height();
 }
+
+void ImagePointManager::setCurrentHotspotColor(const QColor& color)
+{
+    m_globalHotspotColor = color;
+
+    // Actualizamos todos los hotspots
+    for (ImagePoint& h : m_hotspots) {
+        h.setColor(color);
+    }
+
+    emit hotspotColorChanged(); // para repintar la imagen
+}
+

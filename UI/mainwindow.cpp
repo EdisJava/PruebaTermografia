@@ -24,6 +24,16 @@ MainWindow::MainWindow(QWidget *parent)
             this, SLOT(onHotspotUpdated(ImagePoint)));
     connect(m_manager, &ImagePointManager::hotspotsCleared,
             this, &MainWindow::onHotspotsCleared);
+    connect(m_manager, &ImagePointManager::hotspotColorChanged,
+            this, &MainWindow::updatePixelMarkers);
+    connect(m_imageWidget, &ImageWidget::colorSelected,
+            m_manager, &ImagePointManager::setCurrentHotspotColor);
+    connect(m_manager, &ImagePointManager::hotspotColorChanged,
+            this, &MainWindow::updatePixelMarkers);
+    connect(m_imageWidget, &ImageWidget::colorSelected,
+            m_manager, &ImagePointManager::setCurrentHotspotColor);
+
+
 }
 
 MainWindow::~MainWindow()
@@ -139,5 +149,6 @@ void MainWindow::updatePixelMarkers()
         allPixels.append(hotspot.pixels());
     }
 
-    m_imageWidget->setPixelMarkers(allPixels);
+    m_imageWidget->setHotspots(m_manager->hotspots()); // repinta todos con color actualizado
+
 }

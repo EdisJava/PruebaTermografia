@@ -1,7 +1,10 @@
 #include "imagewidget.h"
+#include <QMenu>
 #include <QPainter>
 #include <QMouseEvent>
 #include <QDebug>
+#include "imagepoint.h"
+
 
 ImageWidget::ImageWidget(QWidget *parent)
     : QWidget(parent)
@@ -64,21 +67,35 @@ void ImageWidget::paintEvent(QPaintEvent *event)
     QRectF imageRect = getImageRect();
     painter.drawImage(imageRect, m_image);
 
-    // Dibujar píxeles marcados
-    painter.setPen(QPen(Qt::red, 2));
-    painter.setBrush(Qt::red);
+    // Dibujar píxeles marcados por hotspot
+    for (const ImagePoint& hotspot : m_hotspots) {
+        QColor c = hotspot.color();  // <-- ahora cada hotspot tiene su color
 
-    for (const QPoint& pixel : m_pixelMarkers) {
-        // Convertir coordenadas de imagen a coordenadas de pantalla
-        double relX = (double)pixel.x() / m_image.width();
-        double relY = (double)pixel.y() / m_image.height();
+        QPen pen(Qt::black, 4);      // borde negro para contraste
+        painter.setPen(pen);
+        painter.setBrush(c);
 
-        double screenX = imageRect.x() + relX * imageRect.width();
-        double screenY = imageRect.y() + relY * imageRect.height();
+        for (const QPoint& pixel : hotspot.pixels()) {
+            // Convertir coordenadas de imagen a coordenadas de pantalla
+            double relX = (double)pixel.x() / m_image.width();
+            double relY = (double)pixel.y() / m_image.height();
 
-        painter.drawEllipse(QPointF(screenX, screenY), 3, 3);
+            double screenX = imageRect.x() + relX * imageRect.width();
+            double screenY = imageRect.y() + relY * imageRect.height();
+
+            // Dibujar borde
+            painter.setPen(QPen(Qt::black, 4));
+            painter.setBrush(Qt::NoBrush);
+            painter.drawEllipse(QPointF(screenX, screenY), 4, 4);
+
+            // Dibujar interior con color del hotspot
+            painter.setPen(QPen(c, 2));
+            painter.setBrush(c);
+            painter.drawEllipse(QPointF(screenX, screenY), 3, 3);
+        }
     }
 }
+
 
 void ImageWidget::mousePressEvent(QMouseEvent *event)
 {
@@ -93,8 +110,12 @@ void ImageWidget::mousePressEvent(QMouseEvent *event)
         // Verificar que el click está dentro de la imagen
         if (pixel.x() >= 0 && pixel.x() < m_image.width() &&
             pixel.y() >= 0 && pixel.y() < m_image.height()) {
-            qDebug() << "Emitting rightClicked signal with pixel:" << pixel;
-            emit rightClicked(pixel);
+
+            // Guardamos la posición para usarla luego en el menú
+            m_lastRightClickPixel = pixel;
+
+            // NO emitimos rightClicked aquí
+            // El menú se abrirá automáticamente en contextMenuEvent()
         } else {
             qDebug() << "Pixel out of bounds!";
         }
@@ -128,6 +149,59 @@ QRectF ImageWidget::getImageRect() const
     return imageRect;
 }
 
+
+void ImageWidget::contextMenuEvent(QContextMenuEvent *event)
+{
+    QMenu menu(this);
+
+    QAction* addHotspot = menu.addAction("Marcar punto caliente");
+
+    QMenu* colorMenu = menu.addMenu("Cambiar color del hotspot");
+    QAction* red   = colorMenu->addAction("Rojo");
+    QAction* green = colorMenu->addAction("Verde");
+    QAction* blue  = colorMenu->addAction("Azul");
+    QAction* black = colorMenu->addAction("Negro");
+
+    QAction* selected = menu.exec(event->globalPos());
+    if (!selected) return; // usuario cerró el menú sin elegir
+
+    // Acción según lo elegido
+    QPoint pixel = imagePixelAt(event->pos());
+
+    if (selected == addHotspot) {
+        emit rightClicked(pixel); // solo se marca si selecciona “Marcar punto”
+    } else if (selected == red) {
+        emit colorSelected(Qt::red);
+    } else if (selected == green) {
+        emit colorSelected(Qt::green);
+    } else if (selected == blue) {
+        emit colorSelected(Qt::blue);
+    } else if (selected == black) {
+        emit colorSelected(Qt::black);
+    }
+}
+
+
+
+QPoint ImageWidget::imagePixelAt(const QPoint& widgetPos) const
+{
+    if (m_image.isNull()) return QPoint(-1, -1);
+
+    QRectF imageRect = getImageRect(); // tu función que calcula rect de imagen
+
+    // Normalizar la posición dentro de la imagen
+    double relX = (widgetPos.x() - imageRect.x()) / imageRect.width();
+    double relY = (widgetPos.y() - imageRect.y()) / imageRect.height();
+
+    // Limitar entre 0 y 1
+    relX = qBound(0.0, relX, 1.0);
+    relY = qBound(0.0, relY, 1.0);
+
+    int imgX = int(relX * m_image.width());
+    int imgY = int(relY * m_image.height());
+
+    return QPoint(imgX, imgY);
+}
 
 
 

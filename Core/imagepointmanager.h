@@ -30,17 +30,20 @@ public:
 
     // Utilidad
     bool isValidCoordinate(const QPoint& pixel) const;
+    void setCurrentHotspotColor(const QColor& color);
 
 signals:
     void hotspotUpdated(const ImagePoint& hotspot);
     void hotspotsCleared();
     void imageChanged();
+    void hotspotColorChanged();
 
 private:
     QImage m_image;
     QList<ImagePoint> m_hotspots;
     ImagePoint* m_currentHotspot;
     int m_nextId;
+    QColor m_globalHotspotColor = Qt::red;
 };
 
 #endif // IMAGEPOINTMANAGER_H
