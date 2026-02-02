@@ -92,6 +92,19 @@ void ImageWidget::paintEvent(QPaintEvent *event)
             painter.setPen(QPen(c, 2));
             painter.setBrush(c);
             painter.drawEllipse(QPointF(screenX, screenY), 3, 3);
+
+            // Dibujar etiqueta al lado del punto
+            QFont font = painter.font();
+            font.setPointSize(10); // tamaño de texto
+            font.setBold(true);
+            painter.setFont(font);
+
+            // El color del texto será el mismo que el del hotspot
+            painter.setPen(c);
+
+            // Posición del texto (unos píxeles a la derecha y arriba del punto)
+            painter.drawText(QPointF(screenX + 6, screenY - 2), hotspot.name());
+
         }
     }
 }
